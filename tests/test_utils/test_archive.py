@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -41,9 +42,13 @@ def test_archive_creation_then_delete_files(here, make_random_files):
 
 def test_archive_extraction(dummy_archive):
     archive, files = dummy_archive
-    output = Path("./output").absolute()
-    output.mkdir()
-    assert load_from_archive(str(archive), str(output))
+    Path("output").mkdir()
+    assert load_from_archive(str(archive), "output")
     for file in files:
-        output_file = Path(output, "dummy", file.name)
+        output_file = Path("output", "dummy", file.name)
         assert output_file.exists()
+        assert file.read_bytes() == output_file.read_bytes()
+
+
+def test_archive_extraction_then_deletion(dummy_archive):
+    pass
