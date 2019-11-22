@@ -1,23 +1,100 @@
-import typing
 import os
+import random
+import string
+from pathlib import Path
+
 import pytest
-from sploitkit.core.console import Console
-from prompt_toolkit.enums import EditingMode
-from prompt_toolkit.history import History
 from prompt_toolkit.input.defaults import create_pipe_input
-from prompt_toolkit.key_binding.key_bindings import KeyBindings
 from prompt_toolkit.output import DummyOutput
 from prompt_toolkit.shortcuts import PromptSession
 
 
 @pytest.fixture()
+def here():
+    yield Path(".").absolute()
+
+
+@pytest.fixture()
+def random_string():
+    def random_string(length: int = 10):
+        return "".join(
+            random.choice(string.ascii_uppercase + string.digits) for _ in range(length)
+        )
+
+    return random_string
+
+
+@pytest.fixture()
+def make_random_file(random_string):
+    def make_random_file(
+        parent_dir: Path = None, min_size: int = 128, max_size: int = 512
+    ):
+        parent_dir = Path(parent_dir) if parent_dir else Path(".")
+        parent_dir.mkdir(exist_ok=True, parents=True)
+        file_name = random_string()
+        file_size = random.randint(min_size, max_size)
+        output_file = Path(parent_dir, file_name).absolute()
+        output_file.write_bytes(os.urandom(file_size))
+        yield output_file
+
+    return make_random_file
+
+
+@pytest.fixture()
+def make_random_files(make_random_file):
+    def make_random_files(
+        parent_dir: Path = None,
+        count: int = 10,
+        min_size: int = 128,
+        max_size: int = 512,
+    ):
+        parent_dir = Path(parent_dir) if parent_dir else Path(".")
+        for _ in range(count):
+            yield from make_random_file(parent_dir, min_size, max_size)
+
+    return make_random_files
+
+
+@pytest.fixture()
+def make_random_dir(make_random_files, random_string):
+    def make_random_dir(
+        min_file_count: int = 10,
+        max_file_count: int = 50,
+        min_size: int = 128,
+        max_size: int = 512,
+    ):
+        file_count = random.randint(min_file_count, max_file_count)
+        dir_name = random_string()
+        dir_path = Path(dir_name)
+        yield from make_random_files(dir_path, file_count, min_size, max_size)
+
+    return make_random_dir
+
+
+@pytest.fixture()
+def make_random_dirs(make_random_dir):
+    def make_random_dirs(
+        count: int = 10,
+        min_file_count: int = 10,
+        max_file_count: int = 50,
+        min_size: int = 128,
+        max_size: int = 512,
+    ):
+        for _ in range(count):
+            yield from make_random_dir(
+                min_file_count, max_file_count, min_size, max_size
+            )
+
+    return make_random_dirs
+
+
+@pytest.fixture()
 def dummy_prompt():
     class DummyPrompt(PromptSession):
-
         def __init__(self, *args, **kwargs):
             self.input_pipe = create_pipe_input()
-            kwargs['input'] = self.input_pipe
-            kwargs['output'] = DummyOutput()
+            kwargs["input"] = self.input_pipe
+            kwargs["output"] = DummyOutput()
             super(DummyPrompt, self).__init__(*args, **kwargs)
 
         def send_text(self, text: str):
@@ -27,71 +104,6 @@ def dummy_prompt():
             pass
 
     yield DummyPrompt
-
-
-@pytest.fixture()
-def cli_input(
-        content: typing.Union[str, bytes],
-        mode: str = EditingMode.EMACS,
-        multiline: bool = False,
-        history: typing.Optional[History] = None,
-        key_bindings: typing.Optional[KeyBindings] = None
-):
-    pipe = create_pipe_input()
-    _send_func_select: typing.Dict[typing.Type, typing.Callable] = {
-        str: pipe.send_text,
-        bytes: pipe.send_bytes
-    }
-    try:
-        _send_func = _send_func_select[type(content)]
-    except KeyError:
-        raise TypeError(f'CLI accepts "str" or "bytes", not "{type(content)}"')
-    try:
-        _send_func(content)
-        session = PromptSession(
-            input=pipe,
-            output=DummyOutput(),
-            editing_mode=mode,
-            history=history,
-            multiline=multiline,
-            key_bindings=key_bindings,
-        ).prompt()
-        # session.prompt()
-        return session.default_buffer.document, session.app
-    finally:
-        pipe.close()
-
-
-@pytest.fixture()
-def send_to_console():
-    def send_to_console(
-            console: Console,
-            content: typing.Union[str, bytes],
-    ):
-        pipe = create_pipe_input()
-        _send_func_select: typing.Dict[typing.Type, typing.Callable] = {
-            str: pipe.send_text,
-            bytes: pipe.send_bytes
-        }
-        try:
-            _send_func = _send_func_select[type(content)]
-        except KeyError:
-            raise TypeError(f'CLI accepts "str" or "bytes", not "{type(content)}"')
-
-        try:
-            _send_func(content)
-            session = PromptSession(
-                input=pipe,
-                completer=getattr(console._session, 'completer'),
-                history=getattr(console._session, 'history'),
-                validator=getattr(console._session, 'validator'),
-                style=getattr(console._session, 'style'),
-            )
-            session.prompt()
-            return session.default_buffer.document, session.app
-        finally:
-            pipe.close()
-    return send_to_console
 
 
 # cd into a temporary directory before running each test
@@ -105,4 +117,3 @@ def _tmp_test_dir(tmp_path):
     os.chdir(str(tmp_dir))
     yield
     os.chdir(old_dir)
-
