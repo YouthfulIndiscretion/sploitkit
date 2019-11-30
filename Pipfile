@@ -5,6 +5,9 @@ verify_ssl = true
 
 [dev-packages]
 pytest = "*"
+pytest-cov = "*"
+pipenv-setup = "*"
+sploitkit = {editable = true,path = "."}
 
 [packages]
 ipaddress = "*"
@@ -13,13 +16,9 @@ peewee = "*"
 prompt-toolkit = "*"
 pyfiglet = "*"
 pyminizip = "*"
-pypager = "*"
-pyvim = "*"
 requests = "*"
 termcolor = "*"
 terminaltables = "*"
 Pillow = "*"
 asciistuff = "*"
-
-[requires]
-python_version = "3.8"
+tinyscript = "*"
